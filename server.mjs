@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { extname, join, normalize, resolve } from 'node:path';
+import { extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -11,7 +11,11 @@ const PORT = Number(process.env.PORT || 3000);
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const ADMIN_IDS = new Set((process.env.ADMIN_IDS || '').split(',').map((value) => value.trim()).filter(Boolean));
 const PAYMENT_DETAILS = (process.env.PAYMENT_DETAILS || '').replace(/\\n/g, '\n');
+const PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || '';
 const APP_ORIGIN = process.env.APP_ORIGIN || '';
+const MINI_APP_URL = process.env.MINI_APP_URL || '';
+const SUPPORT_USERNAME = (process.env.SUPPORT_USERNAME || 'rezervmanage').replace(/^@/, '').trim();
+const ALLOW_DEMO_ORDERS = process.env.ALLOW_DEMO_ORDERS === 'true';
 const MAX_INIT_DATA_AGE_SECONDS = Number(process.env.INIT_DATA_MAX_AGE_SECONDS || 86400);
 const STATIC_DIR = resolve(__dirname);
 const DATA_DIR = resolve(process.env.DATA_DIR || join(__dirname, 'runtime'));
@@ -68,7 +72,7 @@ function setCors(request, response) {
     response.setHeader('Access-Control-Allow-Origin', origin);
     response.setHeader('Vary', 'Origin');
     response.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    response.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Payment-Webhook-Secret');
   }
 }
 
@@ -79,6 +83,14 @@ async function readJson(request) {
     if (raw.length > 32_768) throw new Error('Завеликий запит.');
   }
   try { return JSON.parse(raw); } catch { throw new Error('Некоректний JSON.'); }
+}
+
+function isAuthorizedPaymentWebhook(request) {
+  const receivedSecret = request.headers['x-payment-webhook-secret'];
+  if (!PAYMENT_WEBHOOK_SECRET || typeof receivedSecret !== 'string') return false;
+  const received = Buffer.from(receivedSecret, 'utf8');
+  const expected = Buffer.from(PAYMENT_WEBHOOK_SECRET, 'utf8');
+  return received.length === expected.length && timingSafeEqual(received, expected);
 }
 
 function telegramUserFromInitData(initData) {
@@ -136,9 +148,15 @@ async function sendPaymentInstructions(order) {
     'Актуальні реквізити для оплати:',
     PAYMENT_DETAILS,
     '',
-    'Після переказу очікуйте ручного підтвердження. Доступ до бота буде активовано автоматично після підтвердження адміністратором.',
+    'Після переказу система автоматично перевірить оплату та активує доступ до бота.',
   ].join('\n');
-  await telegramApi('sendMessage', { chat_id: order.userId, text });
+  await telegramApi('sendMessage', {
+    chat_id: order.userId,
+    text,
+    reply_markup: {
+      inline_keyboard: [[{ text: 'Я оплатив(ла)', callback_data: `payment_report:${order.id}` }]],
+    },
+  });
 }
 
 function currentAccess(userId) {
@@ -175,10 +193,115 @@ function formatDate(date) {
   return new Intl.DateTimeFormat('uk-UA', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Europe/Kyiv' }).format(date);
 }
 
+function customerDetails(order, fallbackUser) {
+  const customer = order.customer || {};
+  const firstName = customer.firstName || fallbackUser?.first_name || '';
+  const lastName = customer.lastName || fallbackUser?.last_name || '';
+  const username = customer.username || fallbackUser?.username || '';
+  return {
+    name: [firstName, lastName].filter(Boolean).join(' ') || 'не вказано',
+    username: username ? `@${username.replace(/^@/, '')}` : 'не вказано',
+  };
+}
+
+async function notifyAdminsAboutPayment(order, telegramUser) {
+  if (!ADMIN_IDS.size) return;
+  const tariff = TARIFFS[order.tariffId];
+  const customer = customerDetails(order, telegramUser);
+  const text = [
+    'Клієнт повідомив про оплату',
+    '',
+    `Заявка: ${order.id}`,
+    `Клієнт: ${customer.name}`,
+    `Username: ${customer.username}`,
+    `Telegram ID: ${order.userId}`,
+    `Тариф: ${tariff.days} днів — ${tariff.price.toLocaleString('uk-UA')} грн`,
+  ].join('\n');
+  const results = await Promise.allSettled([...ADMIN_IDS].map((adminId) => telegramApi('sendMessage', { chat_id: adminId, text })));
+  if (results.some((result) => result.status === 'rejected')) console.error('Не вдалося надіслати повідомлення одному або кільком адміністраторам.');
+}
+
+function aboutServiceText() {
+  return [
+    'Про послугу «Відстрочка»',
+    '',
+    '1. Оберіть одну підставу.',
+    '2. Заповніть дані заявника у формі.',
+    '3. Оберіть термін доступу до бота.',
+    '4. Отримайте реквізити та номер заявки.',
+    '5. Після автоматичної перевірки оплати доступ активується.',
+    '',
+    'Конфіденційність: ПІБ, дата народження, стать і фото не додаються до замовлення, не надсилаються боту та не зберігаються цією версією сервісу. Для оформлення зберігаються дані профілю Telegram, тариф, статус і дата завершення доступу.',
+    '',
+    'Послуга не є автоматичним юридичним висновком щодо підстав.',
+  ].join('\n');
+}
+
+function mainMenu() {
+  const rows = [];
+  if (MINI_APP_URL) rows.push([{ text: 'Оформити доступ', web_app: { url: MINI_APP_URL } }]);
+  rows.push([{ text: 'Про послугу', callback_data: 'about_service' }]);
+  if (SUPPORT_USERNAME) rows.push([{ text: `Підтримка: @${SUPPORT_USERNAME}`, url: `https://t.me/${SUPPORT_USERNAME}` }]);
+  return { inline_keyboard: rows };
+}
+
+async function handleCallbackQuery(query) {
+  if (query.data === 'about_service' && query.message?.chat?.id) {
+    await telegramApi('answerCallbackQuery', { callback_query_id: query.id });
+    await telegramApi('sendMessage', { chat_id: query.message.chat.id, text: aboutServiceText(), reply_markup: mainMenu() });
+    return;
+  }
+
+  if (!query.data?.startsWith('payment_report:')) return;
+  const orderId = query.data.slice('payment_report:'.length).toUpperCase();
+  const order = state.orders[orderId];
+  if (!order || String(order.userId) !== String(query.from?.id)) {
+    await telegramApi('answerCallbackQuery', { callback_query_id: query.id, text: 'Заявку не знайдено.', show_alert: true });
+    return;
+  }
+  if (order.status === 'paid') {
+    await telegramApi('answerCallbackQuery', { callback_query_id: query.id, text: 'Оплату вже зараховано.' });
+    return;
+  }
+  if (order.status !== 'pending') {
+    await telegramApi('answerCallbackQuery', { callback_query_id: query.id, text: 'Ця заявка вже неактивна.', show_alert: true });
+    return;
+  }
+  if (order.paymentReportedAt) {
+    await telegramApi('answerCallbackQuery', { callback_query_id: query.id, text: 'Ми вже отримали повідомлення про оплату.' });
+    return;
+  }
+
+  order.paymentReportedAt = new Date().toISOString();
+  persistState();
+  await telegramApi('answerCallbackQuery', { callback_query_id: query.id, text: 'Дякуємо! Повідомлення про оплату надіслано.' });
+  await notifyAdminsAboutPayment(order, query.from);
+}
+
 async function handleBotMessage(message) {
   const text = message.text?.trim();
   const userId = message.from?.id;
   if (!text || !userId) return;
+
+  if (text === '/start') {
+    await telegramApi('sendMessage', {
+      chat_id: userId,
+      text: 'Вітаємо! Оберіть потрібну дію нижче.',
+      reply_markup: mainMenu(),
+    });
+    return;
+  }
+
+  if (text === '/about') {
+    await telegramApi('sendMessage', { chat_id: userId, text: aboutServiceText(), reply_markup: mainMenu() });
+    return;
+  }
+
+  if (text === '/support') {
+    const reply = SUPPORT_USERNAME ? `Підтримка: https://t.me/${SUPPORT_USERNAME}` : 'Підтримка ще не налаштована.';
+    await telegramApi('sendMessage', { chat_id: userId, text: reply });
+    return;
+  }
 
   if (text === '/status') {
     const access = currentAccess(userId);
@@ -230,13 +353,19 @@ async function handleBotMessage(message) {
 async function pollUpdates() {
   if (!BOT_TOKEN) return;
   try {
-    const updates = await telegramApi('getUpdates', { offset: updateOffset, timeout: 25, allowed_updates: ['message'] });
+    const updates = await telegramApi('getUpdates', { offset: updateOffset, timeout: 25, allowed_updates: ['message', 'callback_query'] });
     for (const update of updates) {
       updateOffset = update.update_id + 1;
       if (update.message) {
         try { await handleBotMessage(update.message); }
         catch (error) {
           if (update.message.chat?.id) await telegramApi('sendMessage', { chat_id: update.message.chat.id, text: error.message || 'Сталася помилка.' });
+        }
+      }
+      if (update.callback_query) {
+        try { await handleCallbackQuery(update.callback_query); }
+        catch (error) {
+          if (update.callback_query.message?.chat?.id) await telegramApi('sendMessage', { chat_id: update.callback_query.message.chat.id, text: error.message || 'Сталася помилка.' });
         }
       }
     }
@@ -248,9 +377,11 @@ async function pollUpdates() {
 }
 
 function staticFile(response, pathname) {
-  const requested = pathname === '/' ? '/index.html' : pathname;
-  const filePath = resolve(STATIC_DIR, `.${normalize(requested)}`);
-  if (!filePath.startsWith(STATIC_DIR) || !existsSync(filePath)) return false;
+  const publicFiles = { '/': 'index.html', '/index.html': 'index.html', '/config.js': 'config.js' };
+  const filename = publicFiles[pathname];
+  if (!filename) return false;
+  const filePath = join(STATIC_DIR, filename);
+  if (!existsSync(filePath)) return false;
   const mimeTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
   response.writeHead(200, { 'Content-Type': mimeTypes[extname(filePath)] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff' });
   response.end(readFileSync(filePath));
@@ -263,16 +394,56 @@ const server = createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
 
   if (request.method === 'GET' && url.pathname === '/api/health') {
-    json(response, 200, { ok: true, botConfigured: Boolean(BOT_TOKEN), paymentConfigured: Boolean(PAYMENT_DETAILS) });
+    json(response, 200, { ok: true, botConfigured: Boolean(BOT_TOKEN), paymentConfigured: Boolean(PAYMENT_DETAILS), paymentWebhookConfigured: Boolean(PAYMENT_WEBHOOK_SECRET), demoOrdersAllowed: ALLOW_DEMO_ORDERS });
+    return;
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/payments/confirm') {
+    if (!PAYMENT_WEBHOOK_SECRET) {
+      json(response, 503, { message: 'Автоматичне зарахування ще не налаштоване.' });
+      return;
+    }
+    if (!isAuthorizedPaymentWebhook(request)) {
+      json(response, 401, { message: 'Невірний ключ системи зарахування.' });
+      return;
+    }
+    try {
+      const body = await readJson(request);
+      const orderId = String(body.orderId || '').trim().toUpperCase();
+      if (!orderId) throw new Error('Передайте номер заявки.');
+      const existingOrder = state.orders[orderId];
+      if (!existingOrder) {
+        json(response, 404, { message: 'Заявку не знайдено.' });
+        return;
+      }
+      if (existingOrder.status === 'paid') {
+        const access = state.access[String(existingOrder.userId)];
+        json(response, 200, { ok: true, orderId, validUntil: access?.validUntil, alreadyProcessed: true });
+        return;
+      }
+      if (existingOrder.status !== 'pending') throw new Error(`Заявка вже має статус: ${existingOrder.status}.`);
+
+      const { order, validUntil } = confirmOrder(orderId, 'payment-system');
+      if (!order.demo) {
+        await telegramApi('sendMessage', {
+          chat_id: order.userId,
+          text: `Оплату за заявкою № ${order.id} зараховано. Доступ до бота активний до ${formatDate(validUntil)}.`,
+        });
+      }
+      json(response, 200, { ok: true, orderId: order.id, validUntil: validUntil.toISOString() });
+    } catch (error) {
+      json(response, 400, { message: error.message || 'Не вдалося зарахувати оплату.' });
+    }
     return;
   }
 
   if (request.method === 'POST' && url.pathname === '/api/orders') {
     try {
-      if (!PAYMENT_DETAILS) throw new Error('Реквізити для оплати не налаштовані. Зверніться до адміністратора.');
       const body = await readJson(request);
       if (body.serviceId !== 'vidstrochka' || !TARIFFS[body.tariffId]) throw new Error('Оберіть коректний тариф.');
-      const user = telegramUserFromInitData(String(body.initData || ''));
+      const isDemo = ALLOW_DEMO_ORDERS && !body.initData;
+      if (!isDemo && !PAYMENT_DETAILS) throw new Error('Реквізити для оплати не налаштовані. Зверніться до адміністратора.');
+      const user = isDemo ? { id: `demo-${randomBytes(4).toString('hex')}` } : telegramUserFromInitData(String(body.initData || ''));
       const order = {
         id: makeOrderId(),
         userId: user.id,
@@ -280,11 +451,17 @@ const server = createServer(async (request, response) => {
         tariffId: body.tariffId,
         status: 'pending',
         createdAt: new Date().toISOString(),
+        demo: isDemo,
+        customer: {
+          firstName: user.first_name || '',
+          lastName: user.last_name || '',
+          username: user.username || '',
+        },
       };
       state.orders[order.id] = order;
       persistState();
-      await sendPaymentInstructions(order);
-      json(response, 201, { orderId: order.id });
+      if (!isDemo) await sendPaymentInstructions(order);
+      json(response, 201, { orderId: order.id, demo: isDemo });
     } catch (error) {
       const clientMessage = error.message || 'Не вдалося створити заявку.';
       const status = /Telegram-підпис|сесію|Telegram не передав|BOT_TOKEN/.test(clientMessage) ? 401 : 400;
@@ -301,6 +478,7 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`Mini App server started: http://localhost:${PORT}`);
   if (!BOT_TOKEN) console.warn('BOT_TOKEN не задано: створення заявок і команди бота вимкнені.');
   if (!ADMIN_IDS.size) console.warn('ADMIN_IDS не задано: команди /confirm, /reject і /orders нікому не доступні.');
+  if (ALLOW_DEMO_ORDERS) console.warn('Увімкнено ALLOW_DEMO_ORDERS: тестові заявки створюються без Telegram і не мають реальної оплати.');
 });
 
 pollUpdates();
