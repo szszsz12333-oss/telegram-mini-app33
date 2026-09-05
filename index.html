@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#edf4ff" />
+    <title>Відстрочка — оформлення доступу</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="./config.js"></script>
+    <style>
+      :root {
+        --bg: var(--tg-theme-bg-color, #f5f7fb);
+        --card: var(--tg-theme-secondary-bg-color, #ffffff);
+        --text: var(--tg-theme-text-color, #101828);
+        --muted: var(--tg-theme-hint-color, #667085);
+        --accent: var(--tg-theme-button-color, #2878f0);
+        --accent-text: var(--tg-theme-button-text-color, #ffffff);
+        --line: rgba(16, 24, 40, 0.11);
+        --danger: #d92d20;
+        --success: #067647;
+        --radius: 20px;
+      }
+
+      * { box-sizing: border-box; }
+      html { background: var(--bg); }
+      body {
+        margin: 0;
+        min-width: 320px;
+        background:
+          radial-gradient(circle at 100% 0%, rgba(40, 120, 240, .15), transparent 34%),
+          var(--bg);
+        color: var(--text);
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button, input { font: inherit; }
+      button { -webkit-tap-highlight-color: transparent; }
+      .app { width: min(100%, 560px); margin: 0 auto; padding: 20px 16px 36px; }
+      .hero { padding: 10px 4px 22px; }
+      .eyebrow { color: var(--accent); font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+      h1 { margin: 7px 0 8px; font-size: clamp(28px, 7vw, 36px); line-height: 1.05; letter-spacing: -.04em; }
+      .hero p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.45; }
+
+      .progress { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 0 0 18px; }
+      .progress span { height: 4px; border-radius: 999px; background: rgba(16, 24, 40, .12); }
+      .progress span.active { background: var(--accent); }
+
+      .panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; box-shadow: 0 8px 28px rgba(16, 24, 40, .035); }
+      .panel + .panel { margin-top: 14px; }
+      .panel h2 { margin: 0; font-size: 19px; letter-spacing: -.02em; }
+      .hint { margin: 7px 0 0; color: var(--muted); font-size: 14px; line-height: 1.45; }
+      .required { color: var(--danger); }
+
+      .grounds { display: grid; grid-template-columns: 1fr; gap: 9px; margin-top: 16px; }
+      .choice, .plan { position: relative; display: flex; align-items: center; cursor: pointer; }
+      .choice input, .plan input { position: absolute; opacity: 0; pointer-events: none; }
+      .choice span { width: 100%; border: 1px solid var(--line); border-radius: 13px; padding: 13px 42px 13px 14px; font-size: 15px; transition: .16s ease; }
+      .choice span::after { content: ""; position: absolute; right: 15px; top: 50%; width: 17px; height: 17px; border: 1.5px solid #98a2b3; border-radius: 5px; transform: translateY(-50%); }
+      .choice input:checked + span { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
+      .choice input:checked + span::after { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 3px var(--card); }
+
+      .field { display: block; margin-top: 17px; }
+      .field > span:first-child { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 700; }
+      .field small { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; line-height: 1.35; }
+      .text-input { width: 100%; min-height: 51px; border: 1px solid var(--line); border-radius: 13px; padding: 13px 14px; outline: none; background: transparent; color: var(--text); transition: border-color .15s ease, box-shadow .15s ease; }
+      .text-input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 13%, transparent); }
+      .text-input.invalid { border-color: var(--danger); }
+
+      .gender { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+      .gender label { position: relative; cursor: pointer; }
+      .gender input { position: absolute; opacity: 0; }
+      .gender span { display: block; border: 1px solid var(--line); border-radius: 13px; padding: 13px 10px; text-align: center; font-size: 14px; }
+      .gender input:checked + span { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); color: var(--accent); font-weight: 700; }
+
+      .upload { margin-top: 18px; }
+      .upload-label { display: flex; align-items: center; justify-content: center; min-height: 98px; border: 1.5px dashed #98a2b3; border-radius: 14px; cursor: pointer; text-align: center; padding: 14px; }
+      .upload-label strong, .upload-label em { display: block; font-size: 14px; font-style: normal; }
+      .upload-label em { margin-top: 4px; color: var(--muted); font-weight: 400; font-size: 12px; }
+      .upload-label input { display: none; }
+      .file-status { min-height: 18px; margin: 8px 2px 0; color: var(--muted); font-size: 12px; }
+      .file-status.ready { color: var(--success); }
+
+      .consent { display: flex; align-items: flex-start; gap: 10px; margin-top: 20px; color: var(--muted); font-size: 13px; line-height: 1.4; cursor: pointer; }
+      .consent input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); flex: 0 0 auto; }
+      details { margin-top: 13px; border-top: 1px solid var(--line); padding-top: 12px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+      summary { color: var(--accent); cursor: pointer; }
+
+      .plans { display: grid; gap: 10px; margin-top: 17px; }
+      .plan > span { width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; border: 1px solid var(--line); border-radius: 15px; padding: 15px; transition: .16s ease; }
+      .plan strong { display: block; font-size: 16px; }
+      .plan small { color: var(--muted); font-size: 12px; }
+      .price { font-weight: 800; font-size: 16px; white-space: nowrap; }
+      .plan input:checked + span { border: 2px solid var(--accent); padding: 14px; background: color-mix(in srgb, var(--accent) 8%, transparent); }
+      .badge { display: inline-block; margin-top: 4px; border-radius: 999px; padding: 3px 7px; background: #d1fadf; color: #05603a; font-size: 10px; font-weight: 800; }
+
+      .summary-box { display: none; margin-top: 17px; border-radius: 13px; padding: 14px; background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--text); font-size: 14px; line-height: 1.5; }
+      .summary-box.visible { display: block; }
+      .primary { width: 100%; min-height: 54px; margin-top: 18px; border: 0; border-radius: 15px; background: var(--accent); color: var(--accent-text); cursor: pointer; font-weight: 800; font-size: 16px; transition: transform .15s ease, opacity .15s ease; }
+      .primary:active { transform: scale(.985); }
+      .primary:disabled { cursor: wait; opacity: .6; }
+      .form-message { display: none; margin-top: 12px; border-radius: 12px; padding: 12px; font-size: 13px; line-height: 1.4; }
+      .form-message.show { display: block; }
+      .form-message.error { background: #fef3f2; color: #b42318; }
+      .form-message.success { background: #ecfdf3; color: #027a48; }
+      .order-result { display: none; margin-top: 16px; }
+      .order-result.show { display: block; }
+      .order-id { margin-top: 8px; color: var(--accent); font-weight: 800; letter-spacing: .03em; }
+      .notice { margin: 16px 2px 0; color: var(--muted); font-size: 12px; line-height: 1.45; text-align: center; }
+      .hidden { display: none !important; }
+      @media (min-width: 520px) { .grounds { grid-template-columns: 1fr 1fr; } }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header class="hero">
+        <div class="eyebrow">Оформлення доступу</div>
+        <h1>Відстрочка</h1>
+        <p>Заповніть заявку, оберіть термін доступу та отримайте реквізити для ручної оплати.</p>
+      </header>
+
+      <div class="progress" aria-label="Етапи оформлення">
+        <span class="active"></span><span class="active"></span><span class="active"></span><span class="active"></span>
+      </div>
+
+      <form id="applicationForm" novalidate>
+        <section class="panel" aria-labelledby="groundsTitle">
+          <h2 id="groundsTitle">1. Оберіть підстави <span class="required">*</span></h2>
+          <p class="hint">Можна обрати кілька варіантів.</p>
+          <div class="grounds" id="grounds">
+            <label class="choice"><input type="checkbox" value="education" /><span>Навчання</span></label>
+            <label class="choice"><input type="checkbox" value="three_children" /><span>3+ дітей</span></label>
+            <label class="choice"><input type="checkbox" value="single_parent" /><span>Одинокий батько/мати</span></label>
+            <label class="choice"><input type="checkbox" value="disability" /><span>Інвалідність</span></label>
+            <label class="choice"><input type="checkbox" value="caregiver" /><span>Догляд за людиною</span></label>
+            <label class="choice"><input type="checkbox" value="military_spouse" /><span>Чоловік/дружина військового</span></label>
+            <label class="choice"><input type="checkbox" value="education_worker" /><span>Працівник освіти/науки</span></label>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="applicantTitle">
+          <h2 id="applicantTitle">2. Дані заявника</h2>
+          <p class="hint">Поля цього розділу не передаються у замовленні та очищуються після його створення.</p>
+
+          <label class="field">
+            <span>Вкажіть дату народження <span class="required">*</span></span>
+            <input class="text-input" id="birthDate" type="text" inputmode="numeric" autocomplete="bday" maxlength="10" placeholder="ДД.ММ.РРРР" aria-describedby="birthHint" />
+            <small id="birthHint">Приклад: 15.04.2000</small>
+          </label>
+
+          <div class="field">
+            <span>Вкажіть вашу стать <span class="required">*</span></span>
+            <div class="gender" role="radiogroup" aria-label="Стать">
+              <label><input type="radio" name="gender" value="male" /><span>Чоловіча</span></label>
+              <label><input type="radio" name="gender" value="female" /><span>Жіноча</span></label>
+            </div>
+          </div>
+
+          <label class="field">
+            <span>Вкажіть ваше ПІБ <span class="required">*</span></span>
+            <input class="text-input" id="fullName" type="text" autocomplete="name" placeholder="Шевченко Тарас Григорович" />
+            <small>Напишіть прізвище, ім’я та по батькові повністю.</small>
+          </label>
+
+          <div class="upload">
+            <span class="field"><span>Завантажте фото <span class="required">*</span></span></span>
+            <label class="upload-label" for="photo">
+              <span><strong>Обрати фото</strong><em>JPG, PNG або WebP · до 10 МБ</em></span>
+              <input id="photo" type="file" accept="image/jpeg,image/png,image/webp" />
+            </label>
+            <div class="file-status" id="fileStatus" aria-live="polite">Фото зберігається лише на вашому пристрої.</div>
+          </div>
+
+          <label class="consent">
+            <input id="consent" type="checkbox" />
+            <span>Я погоджуюся на обробку персональних даних <span class="required">*</span></span>
+          </label>
+          <details>
+            <summary>Як обробляються дані</summary>
+            Дані заявника та фото потрібні лише для заповнення цієї форми: вони не додаються до замовлення, не надсилаються боту й очищуються після створення заявки. Для доступу зберігаються лише технічні дані: Telegram ID, обраний тариф, статус і дата завершення доступу.
+          </details>
+        </section>
+
+        <section class="panel" aria-labelledby="tariffTitle">
+          <h2 id="tariffTitle">3. Оберіть термін доступу <span class="required">*</span></h2>
+          <p class="hint">Тариф обирається наприкінці оформлення.</p>
+          <div class="plans" id="plans">
+            <label class="plan"><input type="radio" name="tariff" value="30" /><span><span><strong>30 днів</strong><small>Базовий тариф</small></span><b class="price">1 500 грн</b></span></label>
+            <label class="plan"><input type="radio" name="tariff" value="60" /><span><span><strong>60 днів</strong><small>Економія 101 грн</small></span><b class="price">2 899 грн</b></span></label>
+            <label class="plan"><input type="radio" name="tariff" value="90" /><span><span><strong>90 днів</strong><small>Економія 201 грн</small></span><b class="price">4 299 грн</b></span></label>
+            <label class="plan"><input type="radio" name="tariff" value="120" /><span><span><strong>120 днів</strong><small>Найкраща ціна за день <i class="badge">вигідно</i></small></span><b class="price">5 699 грн</b></span></label>
+          </div>
+
+          <div class="summary-box" id="summary"></div>
+          <button class="primary" id="submitButton" type="submit">Отримати реквізити для оплати</button>
+          <div class="form-message" id="formMessage" role="alert"></div>
+        </section>
+      </form>
+
+      <section class="panel order-result" id="orderResult" aria-live="polite">
+        <h2>Заявку створено</h2>
+        <p class="hint">Бот надіслав вам актуальні реквізити, суму та інструкцію для оплати.</p>
+        <div class="order-id" id="orderId"></div>
+        <p class="hint">Після переказу зачекайте на ручне підтвердження. Доступ активується автоматично після команди адміністратора.</p>
+      </section>
+      <p class="notice">Відправляючи заявку, ви не отримуєте автоматичного юридичного висновку щодо підстав.</p>
+    </main>
+
+    <script>
+      (() => {
+        const plans = {
+          '30': { days: 30, price: 1500 },
+          '60': { days: 60, price: 2899 },
+          '90': { days: 90, price: 4299 },
+          '120': { days: 120, price: 5699 },
+        };
+        const tg = window.Telegram?.WebApp;
+        const apiBaseUrl = String(window.APP_CONFIG?.apiBaseUrl || '').replace(/\/$/, '');
+        const form = document.getElementById('applicationForm');
+        const birthDate = document.getElementById('birthDate');
+        const fullName = document.getElementById('fullName');
+        const photo = document.getElementById('photo');
+        const fileStatus = document.getElementById('fileStatus');
+        const consent = document.getElementById('consent');
+        const summary = document.getElementById('summary');
+        const message = document.getElementById('formMessage');
+        const submitButton = document.getElementById('submitButton');
+        const orderResult = document.getElementById('orderResult');
+
+        if (tg) {
+          tg.ready();
+          tg.expand();
+          tg.setHeaderColor?.('secondary_bg_color');
+        }
+
+        const haptic = (type = 'light') => tg?.HapticFeedback?.impactOccurred?.(type);
+        const selectedTariff = () => document.querySelector('input[name="tariff"]:checked')?.value;
+        const selectedGrounds = () => [...document.querySelectorAll('#grounds input:checked')].map((item) => item.value);
+        const selectedGender = () => document.querySelector('input[name="gender"]:checked')?.value;
+
+        function showMessage(text, kind = 'error') {
+          message.textContent = text;
+          message.className = `form-message show ${kind}`;
+        }
+
+        function clearMessage() {
+          message.textContent = '';
+          message.className = 'form-message';
+        }
+
+        function formatBirthDate(event) {
+          const digits = event.target.value.replace(/\D/g, '').slice(0, 8);
+          event.target.value = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean).join('.');
+          event.target.classList.remove('invalid');
+        }
+
+        function isValidBirthDate(value) {
+          const match = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(value);
+          if (!match) return false;
+          const [, day, month, year] = match.map(Number);
+          const date = new Date(year, month - 1, day);
+          return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day && date <= new Date();
+        }
+
+        function updateSummary() {
+          const tariffId = selectedTariff();
+          if (!tariffId) {
+            summary.classList.remove('visible');
+            return;
+          }
+          const plan = plans[tariffId];
+          summary.innerHTML = `<strong>До сплати: ${plan.price.toLocaleString('uk-UA')} грн</strong><br>Доступ до бота активується на ${plan.days} днів після ручного підтвердження оплати.`;
+          summary.classList.add('visible');
+          haptic();
+        }
+
+        function checkPhoto() {
+          const file = photo.files[0];
+          if (!file) return false;
+          const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+          if (!validTypes.includes(file.type) || file.size > 10 * 1024 * 1024) {
+            fileStatus.textContent = 'Оберіть JPG, PNG або WebP до 10 МБ.';
+            fileStatus.className = 'file-status';
+            photo.value = '';
+            return false;
+          }
+          fileStatus.textContent = `Фото прикріплено локально: ${file.name}`;
+          fileStatus.className = 'file-status ready';
+          return true;
+        }
+
+        function validate() {
+          if (!selectedGrounds().length) return 'Оберіть щонайменше одну підставу.';
+          if (!isValidBirthDate(birthDate.value)) {
+            birthDate.classList.add('invalid');
+            return 'Вкажіть коректну дату народження у форматі ДД.ММ.РРРР.';
+          }
+          if (!selectedGender()) return 'Оберіть вашу стать.';
+          if (fullName.value.trim().split(/\s+/).length < 3) return 'Вкажіть ПІБ повністю: прізвище, ім’я та по батькові.';
+          if (!checkPhoto()) return 'Додайте коректне фото до 10 МБ.';
+          if (!consent.checked) return 'Підтвердіть згоду на обробку персональних даних.';
+          if (!selectedTariff()) return 'Оберіть термін доступу.';
+          if (!tg?.initData) return 'Відкрийте Mini App через Telegram, щоб створити захищену заявку.';
+          return null;
+        }
+
+        function resetPersonalFields() {
+          birthDate.value = '';
+          birthDate.classList.remove('invalid');
+          fullName.value = '';
+          document.querySelectorAll('input[name="gender"]').forEach((item) => { item.checked = false; });
+          photo.value = '';
+          fileStatus.textContent = 'Фото зберігається лише на вашому пристрої.';
+          fileStatus.className = 'file-status';
+          consent.checked = false;
+        }
+
+        birthDate.addEventListener('input', formatBirthDate);
+        photo.addEventListener('change', checkPhoto);
+        document.querySelectorAll('input[name="tariff"]').forEach((item) => item.addEventListener('change', updateSummary));
+
+        form.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          clearMessage();
+          const validationError = validate();
+          if (validationError) {
+            haptic('medium');
+            showMessage(validationError);
+            return;
+          }
+
+          const tariffId = selectedTariff();
+          submitButton.disabled = true;
+          submitButton.textContent = 'Створюємо заявку…';
+
+          try {
+            const response = await fetch(`${apiBaseUrl}/api/orders`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                serviceId: 'vidstrochka',
+                tariffId,
+                initData: tg.initData,
+              }),
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(result.message || 'Не вдалося створити заявку. Спробуйте ще раз.');
+
+            document.getElementById('orderId').textContent = `Номер заявки: ${result.orderId}`;
+            orderResult.classList.add('show');
+            resetPersonalFields();
+            haptic('heavy');
+            tg?.showAlert?.('Заявку створено. Реквізити вже надіслані ботом.');
+            orderResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          } catch (error) {
+            haptic('medium');
+            showMessage(error.message || 'Сталася помилка. Спробуйте ще раз.');
+          } finally {
+            submitButton.disabled = false;
+            submitButton.textContent = 'Отримати реквізити для оплати';
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>
