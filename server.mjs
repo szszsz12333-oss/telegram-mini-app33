@@ -139,16 +139,16 @@ async function telegramApi(method, payload) {
 async function sendPaymentInstructions(order) {
   const tariff = TARIFFS[order.tariffId];
   const text = [
-    `Заявка № ${order.id}`,
+    `🧾 Заявка № ${order.id}`,
     '',
     'Послуга: Відстрочка',
-    `Термін доступу: ${tariff.days} днів`,
-    `До сплати: ${tariff.price.toLocaleString('uk-UA')} грн`,
+    `📅 Термін доступу: ${tariff.days} днів`,
+    `💳 До сплати: ${tariff.price.toLocaleString('uk-UA')} грн`,
     '',
     'Актуальні реквізити для оплати:',
     PAYMENT_DETAILS,
     '',
-    'Після переказу система автоматично перевірить оплату та активує доступ до бота.',
+    '🔔 Після переказу система автоматично перевірить оплату та активує доступ до бота.',
   ].join('\n');
   await telegramApi('sendMessage', {
     chat_id: order.userId,
@@ -209,13 +209,13 @@ async function notifyAdminsAboutPayment(order, telegramUser) {
   const tariff = TARIFFS[order.tariffId];
   const customer = customerDetails(order, telegramUser);
   const text = [
-    'Клієнт повідомив про оплату',
+    '🔔 Клієнт повідомив про оплату',
     '',
-    `Заявка: ${order.id}`,
-    `Клієнт: ${customer.name}`,
-    `Username: ${customer.username}`,
-    `Telegram ID: ${order.userId}`,
-    `Тариф: ${tariff.days} днів — ${tariff.price.toLocaleString('uk-UA')} грн`,
+    `🧾 Заявка: ${order.id}`,
+    `👤 Клієнт: ${customer.name}`,
+    `📱 Username: ${customer.username}`,
+    `🆔 Telegram ID: ${order.userId}`,
+    `💳 Тариф: ${tariff.days} днів — ${tariff.price.toLocaleString('uk-UA')} грн`,
   ].join('\n');
   const notifiedAdminIds = new Set(order.paymentNotifiedAdminIds || []);
   for (const adminId of ADMIN_IDS) {
@@ -229,31 +229,33 @@ async function notifyAdminsAboutPayment(order, telegramUser) {
 
 function aboutServiceText() {
   return [
-    'Про послугу «Відстрочка»',
+    'ℹ️ Про послугу «Відстрочка»',
     '',
-    '1. Оберіть одну підставу.',
-    '2. Заповніть дані заявника у формі.',
-    '3. Оберіть термін доступу до бота.',
-    '4. Отримайте реквізити та номер заявки.',
-    '5. Після автоматичної перевірки оплати доступ активується.',
+    'Як оформити послугу:',
     '',
-    'Конфіденційність: ПІБ, дата народження, стать і фото не додаються до замовлення, не надсилаються боту та не зберігаються цією версією сервісу. Для оформлення зберігаються дані профілю Telegram, тариф, статус і дата завершення доступу.',
+    '1. 🛒 Натисніть у навігації бота кнопку «Оформити замовлення».',
+    '2. ✅ Оберіть одну підставу.',
+    '3. 📝 Заповніть дані заявника у формі.',
+    '4. 📅 Оберіть термін доступу до додатку.',
+    '5. 💳 Отримайте реквізити та номер заявки.',
     '',
-    'Послуга не є автоматичним юридичним висновком щодо підстав.',
+    '🔔 Після автоматичної перевірки оплати доступ активується.',
+    '',
+    '🙏 Дякуємо за ваше замовлення.',
   ].join('\n');
 }
 
 function mainMenu() {
   const rows = [];
-  rows.push([{ text: 'Про послугу', callback_data: 'about_service' }]);
-  rows.push([{ text: 'Особистий профіль', callback_data: 'customer_profile' }]);
-  if (SUPPORT_USERNAME) rows.push([{ text: `Підтримка: @${SUPPORT_USERNAME}`, url: `https://t.me/${SUPPORT_USERNAME}` }]);
-  if (MINI_APP_URL) rows.push([{ text: 'Оформити замовлення', web_app: { url: MINI_APP_URL } }]);
+  rows.push([{ text: 'ℹ️ Про послугу', callback_data: 'about_service' }]);
+  rows.push([{ text: '👤 Особистий профіль', callback_data: 'customer_profile' }]);
+  if (SUPPORT_USERNAME) rows.push([{ text: `🆘 Підтримка: @${SUPPORT_USERNAME}`, url: `https://t.me/${SUPPORT_USERNAME}` }]);
+  if (MINI_APP_URL) rows.push([{ text: '🛒 Оформити замовлення', web_app: { url: MINI_APP_URL } }]);
   return { inline_keyboard: rows };
 }
 
 function backToMainMenu() {
-  return { inline_keyboard: [[{ text: '← Повернутися до головного меню', callback_data: 'main_menu' }]] };
+  return { inline_keyboard: [[{ text: '⬅️ Повернутися до головного меню', callback_data: 'main_menu' }]] };
 }
 
 function aboutMenu() {
@@ -270,16 +272,17 @@ function customerProfileText(user) {
   const orderLines = orders.length
     ? orders.map((order) => {
       const tariff = TARIFFS[order.tariffId];
-      return `• ${order.id}: ${tariff?.days || order.tariffId} днів — ${order.status}`;
+      const status = order.status === 'paid' ? '✅ оплачено' : order.status === 'cancelled' ? '❌ скасовано' : '⏳ очікує оплати';
+      return `• ${order.id}: ${tariff?.days || order.tariffId} днів — ${status}`;
     })
     : ['Заявок ще немає.'];
   return [
-    'Особистий профіль',
+    '👤 Особистий профіль',
     '',
-    `Ваш Telegram: ${username}`,
-    `Доступ: ${access ? `активний до ${formatDate(new Date(access.validUntil))}` : 'неактивний'}`,
+    `📱 Ваш Telegram: ${username}`,
+    access ? `✅ Доступ: активний до ${formatDate(new Date(access.validUntil))}` : '❌ Доступ: неактивний',
     '',
-    'Ваші замовлення:',
+    '📋 Ваші замовлення:',
     ...orderLines,
   ].join('\n');
 }
@@ -346,7 +349,7 @@ async function handleBotMessage(message) {
   if (text === '/start') {
     await telegramApi('sendMessage', {
       chat_id: userId,
-      text: 'Вітаємо! Оберіть потрібну дію нижче.',
+      text: '🤖 RezBot\n\nІнформаційний сервіс для подання заявки та перевірки підстав.\n\n🤝 Підтримка на кожному етапі оформлення.',
       reply_markup: mainMenu(),
     });
     return;
@@ -386,9 +389,9 @@ async function handleBotMessage(message) {
     const { order, validUntil } = confirmOrder(orderId, userId);
     await telegramApi('sendMessage', {
       chat_id: order.userId,
-      text: `Оплату за заявкою № ${order.id} підтверджено. Доступ до бота активний до ${formatDate(validUntil)}.`,
+      text: `✅ Оплату за заявкою № ${order.id} підтверджено. Доступ до бота активний до ${formatDate(validUntil)}.`,
     });
-    await telegramApi('sendMessage', { chat_id: userId, text: `Готово. Доступ активний до ${formatDate(validUntil)}.` });
+    await telegramApi('sendMessage', { chat_id: userId, text: `✅ Готово. Доступ активний до ${formatDate(validUntil)}.` });
     return;
   }
 
@@ -442,12 +445,7 @@ async function pollUpdates() {
 }
 
 function staticFile(response, pathname) {
-  const publicFiles = {
-  '/': 'index.html',
-  '/index.html': 'index.html',
-  '/config.js': 'config.js',
-  '/about-service.jpg': 'about-service.jpg',
-};
+  const publicFiles = { '/': 'index.html', '/index.html': 'index.html', '/config.js': 'config.js' };
   const filename = publicFiles[pathname];
   if (!filename) return false;
   const filePath = join(STATIC_DIR, filename);
@@ -497,7 +495,7 @@ const server = createServer(async (request, response) => {
       if (!order.demo) {
         await telegramApi('sendMessage', {
           chat_id: order.userId,
-          text: `Оплату за заявкою № ${order.id} зараховано. Доступ до бота активний до ${formatDate(validUntil)}.`,
+          text: `✅ Оплату за заявкою № ${order.id} зараховано. Доступ до бота активний до ${formatDate(validUntil)}.`,
         });
       }
       json(response, 200, { ok: true, orderId: order.id, validUntil: validUntil.toISOString() });
