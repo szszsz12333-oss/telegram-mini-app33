@@ -205,7 +205,7 @@ function customerDetails(order, fallbackUser) {
 }
 
 async function notifyAdminsAboutPayment(order, telegramUser) {
-  if (!ADMIN_IDS.size) return;
+  if (!ADMIN_IDS.size) throw new Error('Адміністратори не налаштовані. Спробуйте пізніше.');
   const tariff = TARIFFS[order.tariffId];
   const customer = customerDetails(order, telegramUser);
   const text = [
@@ -217,8 +217,14 @@ async function notifyAdminsAboutPayment(order, telegramUser) {
     `Telegram ID: ${order.userId}`,
     `Тариф: ${tariff.days} днів — ${tariff.price.toLocaleString('uk-UA')} грн`,
   ].join('\n');
-  const results = await Promise.allSettled([...ADMIN_IDS].map((adminId) => telegramApi('sendMessage', { chat_id: adminId, text })));
-  if (results.some((result) => result.status === 'rejected')) console.error('Не вдалося надіслати повідомлення одному або кільком адміністраторам.');
+  const notifiedAdminIds = new Set(order.paymentNotifiedAdminIds || []);
+  for (const adminId of ADMIN_IDS) {
+    if (notifiedAdminIds.has(adminId)) continue;
+    await telegramApi('sendMessage', { chat_id: adminId, text });
+    notifiedAdminIds.add(adminId);
+    order.paymentNotifiedAdminIds = [...notifiedAdminIds];
+    persistState();
+  }
 }
 
 function aboutServiceText() {
@@ -245,10 +251,62 @@ function mainMenu() {
   return { inline_keyboard: rows };
 }
 
+function backToMainMenu() {
+  return { inline_keyboard: [[{ text: '← Повернутися до головного меню', callback_data: 'main_menu' }]] };
+}
+
+function aboutMenu() {
+  return {
+    inline_keyboard: [
+      [{ text: 'Особистий профіль', callback_data: 'customer_profile' }],
+      [{ text: '← Повернутися до головного меню', callback_data: 'main_menu' }],
+    ],
+  };
+}
+
+function customerProfileText(user) {
+  const access = currentAccess(user.id);
+  const orders = Object.values(state.orders)
+    .filter((order) => String(order.userId) === String(user.id))
+    .slice(-5)
+    .reverse();
+  const name = [user.first_name, user.last_name].filter(Boolean).join(' ') || 'не вказано';
+  const username = user.username ? `@${user.username}` : 'не вказано';
+  const orderLines = orders.length
+    ? orders.map((order) => {
+      const tariff = TARIFFS[order.tariffId];
+      return `• ${order.id}: ${tariff?.days || order.tariffId} днів — ${order.status}`;
+    })
+    : ['Заявок ще немає.'];
+  return [
+    'Особистий профіль',
+    '',
+    `Ім’я: ${name}`,
+    `Username: ${username}`,
+    `Telegram ID: ${user.id}`,
+    `Доступ: ${access ? `активний до ${formatDate(new Date(access.validUntil))}` : 'неактивний'}`,
+    '',
+    'Останні заявки:',
+    ...orderLines,
+  ].join('\n');
+}
+
 async function handleCallbackQuery(query) {
   if (query.data === 'about_service' && query.message?.chat?.id) {
     await telegramApi('answerCallbackQuery', { callback_query_id: query.id });
-    await telegramApi('sendMessage', { chat_id: query.message.chat.id, text: aboutServiceText(), reply_markup: mainMenu() });
+    await telegramApi('sendMessage', { chat_id: query.message.chat.id, text: aboutServiceText(), reply_markup: aboutMenu() });
+    return;
+  }
+
+  if (query.data === 'customer_profile' && query.message?.chat?.id && query.from?.id) {
+    await telegramApi('answerCallbackQuery', { callback_query_id: query.id });
+    await telegramApi('sendMessage', { chat_id: query.message.chat.id, text: customerProfileText(query.from), reply_markup: backToMainMenu() });
+    return;
+  }
+
+  if (query.data === 'main_menu' && query.message?.chat?.id) {
+    await telegramApi('answerCallbackQuery', { callback_query_id: query.id });
+    await telegramApi('sendMessage', { chat_id: query.message.chat.id, text: 'Головне меню. Оберіть потрібну дію.', reply_markup: mainMenu() });
     return;
   }
 
@@ -272,10 +330,10 @@ async function handleCallbackQuery(query) {
     return;
   }
 
+  await notifyAdminsAboutPayment(order, query.from);
   order.paymentReportedAt = new Date().toISOString();
   persistState();
   await telegramApi('answerCallbackQuery', { callback_query_id: query.id, text: 'Дякуємо! Повідомлення про оплату надіслано.' });
-  await notifyAdminsAboutPayment(order, query.from);
 }
 
 async function handleBotMessage(message) {
@@ -293,7 +351,12 @@ async function handleBotMessage(message) {
   }
 
   if (text === '/about') {
-    await telegramApi('sendMessage', { chat_id: userId, text: aboutServiceText(), reply_markup: mainMenu() });
+    await telegramApi('sendMessage', { chat_id: userId, text: aboutServiceText(), reply_markup: aboutMenu() });
+    return;
+  }
+
+  if (text === '/profile') {
+    await telegramApi('sendMessage', { chat_id: userId, text: customerProfileText(message.from), reply_markup: backToMainMenu() });
     return;
   }
 
