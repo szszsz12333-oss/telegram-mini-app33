@@ -442,7 +442,12 @@ async function pollUpdates() {
 }
 
 function staticFile(response, pathname) {
-  const publicFiles = { '/': 'index.html', '/index.html': 'index.html', '/config.js': 'config.js' };
+  const publicFiles = {
+  '/': 'index.html',
+  '/index.html': 'index.html',
+  '/config.js': 'config.js',
+  '/about-service.jpg': 'about-service.jpg',
+};
   const filename = publicFiles[pathname];
   if (!filename) return false;
   const filePath = join(STATIC_DIR, filename);
