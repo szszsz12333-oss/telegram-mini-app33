@@ -247,6 +247,7 @@ function mainMenu() {
   const rows = [];
   if (MINI_APP_URL) rows.push([{ text: 'Оформити доступ', web_app: { url: MINI_APP_URL } }]);
   rows.push([{ text: 'Про послугу', callback_data: 'about_service' }]);
+  rows.push([{ text: 'Особистий профіль', callback_data: 'customer_profile' }]);
   if (SUPPORT_USERNAME) rows.push([{ text: `Підтримка: @${SUPPORT_USERNAME}`, url: `https://t.me/${SUPPORT_USERNAME}` }]);
   return { inline_keyboard: rows };
 }
@@ -256,12 +257,7 @@ function backToMainMenu() {
 }
 
 function aboutMenu() {
-  return {
-    inline_keyboard: [
-      [{ text: 'Особистий профіль', callback_data: 'customer_profile' }],
-      [{ text: '← Повернутися до головного меню', callback_data: 'main_menu' }],
-    ],
-  };
+  return backToMainMenu();
 }
 
 function customerProfileText(user) {
@@ -270,7 +266,6 @@ function customerProfileText(user) {
     .filter((order) => String(order.userId) === String(user.id))
     .slice(-5)
     .reverse();
-  const name = [user.first_name, user.last_name].filter(Boolean).join(' ') || 'не вказано';
   const username = user.username ? `@${user.username}` : 'не вказано';
   const orderLines = orders.length
     ? orders.map((order) => {
@@ -281,32 +276,39 @@ function customerProfileText(user) {
   return [
     'Особистий профіль',
     '',
-    `Ім’я: ${name}`,
-    `Username: ${username}`,
-    `Telegram ID: ${user.id}`,
+    `Ваш Telegram: ${username}`,
     `Доступ: ${access ? `активний до ${formatDate(new Date(access.validUntil))}` : 'неактивний'}`,
     '',
-    'Останні заявки:',
+    'Ваші замовлення:',
     ...orderLines,
   ].join('\n');
+}
+
+async function replaceBotMessage(query, text, replyMarkup) {
+  await telegramApi('editMessageText', {
+    chat_id: query.message.chat.id,
+    message_id: query.message.message_id,
+    text,
+    reply_markup: replyMarkup,
+  });
 }
 
 async function handleCallbackQuery(query) {
   if (query.data === 'about_service' && query.message?.chat?.id) {
     await telegramApi('answerCallbackQuery', { callback_query_id: query.id });
-    await telegramApi('sendMessage', { chat_id: query.message.chat.id, text: aboutServiceText(), reply_markup: aboutMenu() });
+    await replaceBotMessage(query, aboutServiceText(), aboutMenu());
     return;
   }
 
   if (query.data === 'customer_profile' && query.message?.chat?.id && query.from?.id) {
     await telegramApi('answerCallbackQuery', { callback_query_id: query.id });
-    await telegramApi('sendMessage', { chat_id: query.message.chat.id, text: customerProfileText(query.from), reply_markup: backToMainMenu() });
+    await replaceBotMessage(query, customerProfileText(query.from), backToMainMenu());
     return;
   }
 
   if (query.data === 'main_menu' && query.message?.chat?.id) {
     await telegramApi('answerCallbackQuery', { callback_query_id: query.id });
-    await telegramApi('sendMessage', { chat_id: query.message.chat.id, text: 'Головне меню. Оберіть потрібну дію.', reply_markup: mainMenu() });
+    await replaceBotMessage(query, 'Головне меню. Оберіть потрібну дію.', mainMenu());
     return;
   }
 
