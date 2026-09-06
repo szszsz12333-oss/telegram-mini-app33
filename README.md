@@ -17,7 +17,7 @@
    - `PAYMENT_DETAILS` — актуальные реквизиты, которые бот отправит пользователю;
    - `PAYMENT_WEBHOOK_SECRET` — длинный секретный ключ для вашей системы зачисления;
    - `APP_ORIGIN` — адрес опубликованной Mini App, например `https://name.github.io`.
-   - `MINI_APP_URL` — полный HTTPS-адрес страницы Mini App;
+   - `MINI_APP_URL` — полный HTTPS-адрес страницы Mini App; для текущего развертывания: `https://telegram-mini-app33.onrender.com/`.
    - `SUPPORT_USERNAME` — необязательный username поддержки без `@`.
 3. Запустите сервер:
 

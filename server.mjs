@@ -13,7 +13,7 @@ const ADMIN_IDS = new Set((process.env.ADMIN_IDS || '').split(',').map((value) =
 const PAYMENT_DETAILS = (process.env.PAYMENT_DETAILS || '').replace(/\\n/g, '\n');
 const PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || '';
 const APP_ORIGIN = process.env.APP_ORIGIN || '';
-const MINI_APP_URL = process.env.MINI_APP_URL || '';
+const MINI_APP_URL = process.env.MINI_APP_URL || 'https://telegram-mini-app33.onrender.com/';
 const SUPPORT_USERNAME = (process.env.SUPPORT_USERNAME || 'rezervmanage').replace(/^@/, '').trim();
 const ALLOW_DEMO_ORDERS = process.env.ALLOW_DEMO_ORDERS === 'true';
 const MAX_INIT_DATA_AGE_SECONDS = Number(process.env.INIT_DATA_MAX_AGE_SECONDS || 86400);
@@ -245,10 +245,10 @@ function aboutServiceText() {
 
 function mainMenu() {
   const rows = [];
-  if (MINI_APP_URL) rows.push([{ text: 'Оформити доступ', web_app: { url: MINI_APP_URL } }]);
   rows.push([{ text: 'Про послугу', callback_data: 'about_service' }]);
   rows.push([{ text: 'Особистий профіль', callback_data: 'customer_profile' }]);
   if (SUPPORT_USERNAME) rows.push([{ text: `Підтримка: @${SUPPORT_USERNAME}`, url: `https://t.me/${SUPPORT_USERNAME}` }]);
+  if (MINI_APP_URL) rows.push([{ text: 'Оформити замовлення', web_app: { url: MINI_APP_URL } }]);
   return { inline_keyboard: rows };
 }
 
