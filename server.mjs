@@ -136,41 +136,7 @@ async function telegramApi(method, payload) {
   if (!response.ok || !result.ok) throw new Error(result.description || `Telegram API: ${method} failed`);
   return result.result;
 }
-async function sendLocalPhoto(chatId, caption, replyMarkup) {
-  const photoPath = join(__dirname, 'about-service.jpg');
 
-  if (!existsSync(photoPath)) {
-    throw new Error('Файл about-service.jpg не знайдено на сервері.');
-  }
-
-  const form = new FormData();
-  form.append('chat_id', String(chatId));
-  form.append('caption', caption);
-  form.append('reply_markup', JSON.stringify(replyMarkup));
-
-  const image = new Blob(
-    [readFileSync(photoPath)],
-    { type: 'image/jpeg' },
-  );
-
-  form.append('photo', image, 'about-service.jpg');
-
-  const response = await fetch(
-    `https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`,
-    {
-      method: 'POST',
-      body: form,
-    },
-  );
-
-  const result = await response.json();
-
-  if (!response.ok || !result.ok) {
-    throw new Error(result.description || 'Не вдалося надіслати фото.');
-  }
-
-  return result.result;
-}
 async function sendPaymentInstructions(order) {
   const tariff = TARIFFS[order.tariffId];
   const text = [
