@@ -14,6 +14,7 @@ const PAYMENT_DETAILS = (process.env.PAYMENT_DETAILS || '').replace(/\\n/g, '\n'
 const PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || '';
 const APP_ORIGIN = process.env.APP_ORIGIN || '';
 const MINI_APP_URL = process.env.MINI_APP_URL || 'https://telegram-mini-app33.onrender.com/';
+const ABOUT_IMAGE_URL = new URL('/about-service.jpg', MINI_APP_URL).href;
 const SUPPORT_USERNAME = (process.env.SUPPORT_USERNAME || 'rezervmanage').replace(/^@/, '').trim();
 const ALLOW_DEMO_ORDERS = process.env.ALLOW_DEMO_ORDERS === 'true';
 const MAX_INIT_DATA_AGE_SECONDS = Number(process.env.INIT_DATA_MAX_AGE_SECONDS || 86400);
@@ -135,7 +136,41 @@ async function telegramApi(method, payload) {
   if (!response.ok || !result.ok) throw new Error(result.description || `Telegram API: ${method} failed`);
   return result.result;
 }
+async function sendLocalPhoto(chatId, caption, replyMarkup) {
+  const photoPath = join(__dirname, 'about-service.jpg');
 
+  if (!existsSync(photoPath)) {
+    throw new Error('Файл about-service.jpg не знайдено на сервері.');
+  }
+
+  const form = new FormData();
+  form.append('chat_id', String(chatId));
+  form.append('caption', caption);
+  form.append('reply_markup', JSON.stringify(replyMarkup));
+
+  const image = new Blob(
+    [readFileSync(photoPath)],
+    { type: 'image/jpeg' },
+  );
+
+  form.append('photo', image, 'about-service.jpg');
+
+  const response = await fetch(
+    `https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`,
+    {
+      method: 'POST',
+      body: form,
+    },
+  );
+
+  const result = await response.json();
+
+  if (!response.ok || !result.ok) {
+    throw new Error(result.description || 'Не вдалося надіслати фото.');
+  }
+
+  return result.result;
+}
 async function sendPaymentInstructions(order) {
   const tariff = TARIFFS[order.tariffId];
   const text = [
@@ -295,13 +330,40 @@ async function replaceBotMessage(query, text, replyMarkup) {
     reply_markup: replyMarkup,
   });
 }
+async function showAboutService(query) {
+  await telegramApi('deleteMessage', {
+    chat_id: query.message.chat.id,
+    message_id: query.message.message_id,
+  });
 
+  await telegramApi('sendPhoto', {
+    chat_id: query.message.chat.id,
+    photo: ABOUT_IMAGE_URL,
+    caption: aboutServiceText(),
+    reply_markup: aboutMenu(),
+  });
+}
+
+async function showMainMenu(query) {
+  await telegramApi('deleteMessage', {
+    chat_id: query.message.chat.id,
+    message_id: query.message.message_id,
+  });
+
+  await telegramApi('sendMessage', {
+    chat_id: query.message.chat.id,
+    text: 'Головне меню. Оберіть потрібну дію.',
+    reply_markup: mainMenu(),
+  });
+}
 async function handleCallbackQuery(query) {
-  if (query.data === 'about_service' && query.message?.chat?.id) {
-    await telegramApi('answerCallbackQuery', { callback_query_id: query.id });
-    await replaceBotMessage(query, aboutServiceText(), aboutMenu());
-    return;
-  }
+ if (query.data === 'about_service' && query.message?.chat?.id) {
+  await telegramApi('answerCallbackQuery', {
+    callback_query_id: query.id,
+  });
+  await showAboutService(query);
+  return;
+}
 
   if (query.data === 'customer_profile' && query.message?.chat?.id && query.from?.id) {
     await telegramApi('answerCallbackQuery', { callback_query_id: query.id });
@@ -309,11 +371,13 @@ async function handleCallbackQuery(query) {
     return;
   }
 
-  if (query.data === 'main_menu' && query.message?.chat?.id) {
-    await telegramApi('answerCallbackQuery', { callback_query_id: query.id });
-    await replaceBotMessage(query, 'Головне меню. Оберіть потрібну дію.', mainMenu());
-    return;
-  }
+ if (query.data === 'main_menu' && query.message?.chat?.id) {
+  await telegramApi('answerCallbackQuery', {
+    callback_query_id: query.id,
+  });
+  await showMainMenu(query);
+  return;
+}
 
   if (!query.data?.startsWith('payment_report:')) return;
   const orderId = query.data.slice('payment_report:'.length).toUpperCase();
@@ -445,12 +509,23 @@ async function pollUpdates() {
 }
 
 function staticFile(response, pathname) {
-  const publicFiles = { '/': 'index.html', '/index.html': 'index.html', '/config.js': 'config.js' };
+ const publicFiles = {
+  '/': 'index.html',
+  '/index.html': 'index.html',
+  '/config.js': 'config.js',
+  '/about-service.jpg': 'about-service.jpg',
+};
   const filename = publicFiles[pathname];
   if (!filename) return false;
   const filePath = join(STATIC_DIR, filename);
   if (!existsSync(filePath)) return false;
-  const mimeTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
+  const mimeTypes = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
   response.writeHead(200, { 'Content-Type': mimeTypes[extname(filePath)] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff' });
   response.end(readFileSync(filePath));
   return true;
