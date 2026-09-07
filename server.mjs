@@ -14,7 +14,7 @@ const PAYMENT_DETAILS = (process.env.PAYMENT_DETAILS || '').replace(/\\n/g, '\n'
 const PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || '';
 const APP_ORIGIN = process.env.APP_ORIGIN || '';
 const MINI_APP_URL = process.env.MINI_APP_URL || 'https://telegram-mini-app33.onrender.com/';
-const ABOUT_IMAGE_URL = 'https://telegram-mini-app33.onrender.com/about-service.jpg';
+const ABOUT_IMAGE_URL = new URL('/about-service.jpg', MINI_APP_URL).href;
 const SUPPORT_USERNAME = (process.env.SUPPORT_USERNAME || 'rezervmanage').replace(/^@/, '').trim();
 const ALLOW_DEMO_ORDERS = process.env.ALLOW_DEMO_ORDERS === 'true';
 const MAX_INIT_DATA_AGE_SECONDS = Number(process.env.INIT_DATA_MAX_AGE_SECONDS || 86400);
