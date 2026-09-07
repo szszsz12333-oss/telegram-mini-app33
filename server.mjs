@@ -161,16 +161,6 @@ async function telegramApi(method, payload) {
 
   return result.result;
 }
-  if (!BOT_TOKEN) throw new Error('BOT_TOKEN не налаштований.');
-  const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  const result = await response.json();
-  if (!response.ok || !result.ok) throw new Error(result.description || `Telegram API: ${method} failed`);
-  return result.result;
-}
 
 async function sendPaymentInstructions(order) {
   const tariff = TARIFFS[order.tariffId];
@@ -515,11 +505,7 @@ async function pollUpdates() {
 }
 
 function staticFile(response, pathname) {
- const publicFiles = {
-  '/': 'index.html',
-  '/index.html': 'index.html',
-  '/config.js': 'config.js',
-  '/about-service.jpg': 'about-service.jpg',
+ const publicFiles =  '/': 'index.html','/index.html': 'index.html','/config.js': 'config.js',
 };
   const filename = publicFiles[pathname];
   if (!filename) return false;
@@ -531,7 +517,7 @@ function staticFile(response, pathname) {
   '.css': 'text/css; charset=utf-8',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
-  '.png': 'about-service.jpg',
+  '.png': 'image/png',
 };
   response.writeHead(200, { 'Content-Type': mimeTypes[extname(filePath)] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff' });
   response.end(readFileSync(filePath));
