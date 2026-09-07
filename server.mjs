@@ -126,11 +126,10 @@ function makeOrderId() {
 }
 
 async function telegramApi(method, payload) {
-  async function sendLocalPhoto(chatId, caption, replyMarkup) {
+async function sendLocalPhoto(chatId, caption, replyMarkup) {
   const photoPath = join(__dirname, 'about-service.jpg');
 
   if (!existsSync(photoPath)) {
-    throw new Error('Файл about-service.jpg не знайдено на сервері.');
   }
 
   const form = new FormData();
@@ -156,7 +155,6 @@ async function telegramApi(method, payload) {
   const result = await response.json();
 
   if (!response.ok || !result.ok) {
-    throw new Error(result.description || 'Не вдалося надіслати фото.');
   }
 
   return result.result;
