@@ -438,6 +438,23 @@ async function handleBotMessage(message) {
   const [command, rawOrderId] = text.split(/\s+/, 2);
   const orderId = rawOrderId?.toUpperCase();
 
+  if (command === '/o') {
+    if (!orderId) throw new Error('Використовуйте: /o ORD-...');
+    const order = state.orders[orderId];
+    if (!order) throw new Error('Заявку не знайдено.');
+    if (order.status !== 'pending') throw new Error(`Заявка вже має статус: ${order.status}.`);
+
+    order.processingAt = new Date().toISOString();
+    order.processingBy = String(userId);
+    persistState();
+    await telegramApi('sendMessage', {
+      chat_id: order.userId,
+      text: `⏳ Ваш платіж за заявкою № ${order.id} обробляється. Ми повідомимо вас після завершення перевірки.`,
+    });
+    await telegramApi('sendMessage', { chat_id: userId, text: `⏳ Клієнта повідомлено: платіж за заявкою ${order.id} обробляється.` });
+    return;
+  }
+
   if (command === '/confirm') {
     if (!orderId) throw new Error('Використовуйте: /confirm ORD-...');
     const { order, validUntil } = confirmOrder(orderId, userId);
@@ -466,7 +483,7 @@ async function handleBotMessage(message) {
   if (command === '/orders') {
     const pending = Object.values(state.orders).filter((order) => order.status === 'pending').slice(-20);
     const textResponse = pending.length
-      ? pending.map((order) => `${order.id} — ${TARIFFS[order.tariffId].days} днів, ${TARIFFS[order.tariffId].price} грн`).join('\n')
+      ? pending.map((order) => `${order.id} — ${TARIFFS[order.tariffId].days} днів, ${TARIFFS[order.tariffId].price} грн${order.processingAt ? ' ⏳ в обробці' : ''}`).join('\n')
       : 'Активних заявок немає.';
     await telegramApi('sendMessage', { chat_id: userId, text: textResponse });
   }
@@ -598,7 +615,7 @@ const server = createServer(async (request, response) => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Mini App server started: http://localhost:${PORT}`);
   if (!BOT_TOKEN) console.warn('BOT_TOKEN не задано: створення заявок і команди бота вимкнені.');
-  if (!ADMIN_IDS.size) console.warn('ADMIN_IDS не задано: команди /confirm, /reject і /orders нікому не доступні.');
+  if (!ADMIN_IDS.size) console.warn('ADMIN_IDS не задано: команди /o, /confirm, /reject і /orders нікому не доступні.');
   if (ALLOW_DEMO_ORDERS) console.warn('Увімкнено ALLOW_DEMO_ORDERS: тестові заявки створюються без Telegram і не мають реальної оплати.');
 });
 
