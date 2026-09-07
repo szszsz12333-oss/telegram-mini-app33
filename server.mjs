@@ -126,6 +126,41 @@ function makeOrderId() {
 }
 
 async function telegramApi(method, payload) {
+  async function sendLocalPhoto(chatId, caption, replyMarkup) {
+  const photoPath = join(__dirname, 'about-service.png');
+
+  if (!existsSync(photoPath)) {
+    throw new Error('Файл about-service.png не знайдено на сервері.');
+  }
+
+  const form = new FormData();
+  form.append('chat_id', String(chatId));
+  form.append('caption', caption);
+  form.append('reply_markup', JSON.stringify(replyMarkup));
+
+  const image = new Blob(
+    [readFileSync(photoPath)],
+    { type: 'image/png' },
+  );
+
+  form.append('photo', image, 'about-service.png');
+
+  const response = await fetch(
+    `https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`,
+    {
+      method: 'POST',
+      body: form,
+    },
+  );
+
+  const result = await response.json();
+
+  if (!response.ok || !result.ok) {
+    throw new Error(result.description || 'Не вдалося надіслати фото.');
+  }
+
+  return result.result;
+}
   if (!BOT_TOKEN) throw new Error('BOT_TOKEN не налаштований.');
   const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
     method: 'POST',
@@ -306,12 +341,11 @@ async function showAboutService(query) {
     message_id: query.message.message_id,
   });
 
-  await telegramApi('sendPhoto', {
-    chat_id: query.message.chat.id,
-    photo: ABOUT_IMAGE_URL,
-    caption: aboutServiceText(),
-    reply_markup: aboutMenu(),
-  });
+  await sendLocalPhoto(
+    query.message.chat.id,
+    aboutServiceText(),
+    aboutMenu(),
+  );
 }
 
 async function showMainMenu(query) {
@@ -331,6 +365,7 @@ async function handleCallbackQuery(query) {
   await telegramApi('answerCallbackQuery', {
     callback_query_id: query.id,
   });
+
   await showAboutService(query);
   return;
 }
