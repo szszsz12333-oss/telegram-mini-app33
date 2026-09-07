@@ -160,7 +160,7 @@ async function sendPaymentInstructions(order) {
   });
 }
 
-async function sendCryptoPaymentInstructions(order) {
+async function replaceWithCryptoPaymentInstructions(query, order) {
   const tariff = TARIFFS[order.tariffId];
   const text = [
     `🧾 Заявка № ${order.id}`,
@@ -172,12 +172,8 @@ async function sendCryptoPaymentInstructions(order) {
     '',
     '🔔 Після переказу натисніть кнопку «Я оплатив(ла)». Система перевірить оплату та активує доступ.',
   ].join('\n');
-  await telegramApi('sendMessage', {
-    chat_id: order.userId,
-    text,
-    reply_markup: {
-      inline_keyboard: [[{ text: '✅ Я оплатив(ла)', callback_data: `payment_report:${order.id}` }]],
-    },
+  await replaceBotMessage(query, text, {
+    inline_keyboard: [[{ text: '✅ Я оплатив(ла)', callback_data: `payment_report:${order.id}` }]],
   });
 }
 
@@ -365,8 +361,10 @@ async function handleCallbackQuery(query) {
       });
       return;
     }
+    order.paymentMethod = 'crypto';
+    persistState();
+    await replaceWithCryptoPaymentInstructions(query, order);
     await telegramApi('answerCallbackQuery', { callback_query_id: query.id });
-    await sendCryptoPaymentInstructions(order);
     return;
   }
 
@@ -393,6 +391,7 @@ async function handleCallbackQuery(query) {
   await notifyAdminsAboutPayment(order, query.from);
   order.paymentReportedAt = new Date().toISOString();
   persistState();
+  await replaceBotMessage(query, '✅ Повідомлення про оплату надіслано. Очікуйте на автоматичну перевірку платежу.', backToMainMenu());
   await telegramApi('answerCallbackQuery', { callback_query_id: query.id, text: 'Дякуємо! Повідомлення про оплату надіслано.' });
 }
 
