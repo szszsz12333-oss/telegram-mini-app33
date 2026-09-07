@@ -125,11 +125,13 @@ function makeOrderId() {
   return `ORD-${Date.now().toString(36).toUpperCase()}-${suffix}`;
 }
 
-async function telegramApi(method, payload) {
+async function telegramApi(method, payload) {}
+
 async function sendLocalPhoto(chatId, caption, replyMarkup) {
   const photoPath = join(__dirname, 'about-service.jpg');
 
   if (!existsSync(photoPath)) {
+    throw new Error('Файл about-service.jpg не знайдено на сервері.');
   }
 
   const form = new FormData();
@@ -155,6 +157,7 @@ async function sendLocalPhoto(chatId, caption, replyMarkup) {
   const result = await response.json();
 
   if (!response.ok || !result.ok) {
+    throw new Error(result.description || 'Не вдалося надіслати фото.');
   }
 
   return result.result;
