@@ -379,7 +379,7 @@ async function handleBotMessage(message) {
   if (text === '/start') {
     await telegramApi('sendMessage', {
       chat_id: userId,
-      text: '🤖 RezBot\n\nІнформаційний сервіс для подання заявки та перевірки підстав.\n\n🤝 Підтримка на кожному етапі оформлення.',
+      text: '🤖 RezBot\n\nШвидке отримання Фейк документів та «відстрочки» у Резерв+ ⚡\n\nЗручний сервіс, оформлення в кілька кроків.\n\n🤝 Підтримка на кожному етапі оформлення.\n\n❗️Допомагає в 99% випадків❗️',
       reply_markup: mainMenu(),
     });
     return;
