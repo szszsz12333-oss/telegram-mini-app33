@@ -496,7 +496,7 @@ function staticFile(response, pathname) {
   '.css': 'text/css; charset=utf-8',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
+  '.png': 'about-service.jpg',
 };
   response.writeHead(200, { 'Content-Type': mimeTypes[extname(filePath)] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff' });
   response.end(readFileSync(filePath));
