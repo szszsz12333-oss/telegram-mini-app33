@@ -127,10 +127,10 @@ function makeOrderId() {
 
 async function telegramApi(method, payload) {
   async function sendLocalPhoto(chatId, caption, replyMarkup) {
-  const photoPath = join(__dirname, 'about-service.png');
+  const photoPath = join(__dirname, 'about-service.jpg');
 
   if (!existsSync(photoPath)) {
-    throw new Error('Файл about-service.png не знайдено на сервері.');
+    throw new Error('Файл about-service.jpg не знайдено на сервері.');
   }
 
   const form = new FormData();
@@ -140,10 +140,10 @@ async function telegramApi(method, payload) {
 
   const image = new Blob(
     [readFileSync(photoPath)],
-    { type: 'image/png' },
+    { type: 'image/jpeg' },
   );
 
-  form.append('photo', image, 'about-service.png');
+  form.append('photo', image, 'about-service.jpg');
 
   const response = await fetch(
     `https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`,
