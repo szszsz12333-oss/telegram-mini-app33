@@ -331,11 +331,12 @@ async function showAboutService(query) {
     message_id: query.message.message_id,
   });
 
-  await sendLocalPhoto(
-    query.message.chat.id,
-    aboutServiceText(),
-    aboutMenu(),
-  );
+  await telegramApi('sendPhoto', {
+    chat_id: query.message.chat.id,
+    photo: ABOUT_IMAGE_URL,
+    caption: aboutServiceText(),
+    reply_markup: aboutMenu(),
+  });
 }
 
 async function showMainMenu(query) {
@@ -351,11 +352,10 @@ async function showMainMenu(query) {
   });
 }
 async function handleCallbackQuery(query) {
-  if (query.data === 'about_service' && query.message?.chat?.id) {
+ if (query.data === 'about_service' && query.message?.chat?.id) {
   await telegramApi('answerCallbackQuery', {
     callback_query_id: query.id,
   });
-
   await showAboutService(query);
   return;
 }
