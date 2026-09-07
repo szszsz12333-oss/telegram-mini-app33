@@ -475,24 +475,13 @@ async function pollUpdates() {
 }
 
 function staticFile(response, pathname) {
- const publicFiles = {
-  '/': 'index.html',
-  '/index.html': 'index.html',
-  '/config.js': 'config.js',
-  '/about-service.jpg': 'about-service.jpg',
+ const publicFiles = {'/': 'index.html','/index.html': 'index.html','/config.js': 'config.js','/about-service.jpg': 'about-service.jpg',
 };
   const filename = publicFiles[pathname];
   if (!filename) return false;
   const filePath = join(STATIC_DIR, filename);
   if (!existsSync(filePath)) return false;
-  const mimeTypes = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
-    
+  const mimeTypes = {'.html': 'text/html; charset=utf-8','.js': 'text/javascript; charset=utf-8','.css': 'text/css; charset=utf-8','.jpg': 'image/jpeg','.jpeg': 'image/jpeg','.png': 'image/png',  
   response.writeHead(200, { 'Content-Type': mimeTypes[extname(filePath)] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff' });
   response.end(readFileSync(filePath));
   return true;
