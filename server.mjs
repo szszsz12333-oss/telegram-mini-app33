@@ -404,7 +404,7 @@ async function handleBotMessage(message) {
   if (text === '/status') {
     const access = currentAccess(userId);
     const reply = access
-      ? `Ваш доступ активний до ${formatDate(new Date(access.validUntil))}.`
+      ? `Ваш доступ активний до ${formatDate(new Date(access.validUntil))}`
       : 'Активного доступу немає. Відкрийте Mini App, щоб створити заявку.';
     await telegramApi('sendMessage', { chat_id: userId, text: reply });
     return;
