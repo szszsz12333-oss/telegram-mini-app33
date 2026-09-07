@@ -11,10 +11,10 @@ const PORT = Number(process.env.PORT || 3000);
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const ADMIN_IDS = new Set((process.env.ADMIN_IDS || '').split(',').map((value) => value.trim()).filter(Boolean));
 const PAYMENT_DETAILS = (process.env.PAYMENT_DETAILS || '').replace(/\\n/g, '\n');
+const CRYPTO_PAYMENT_DETAILS = (process.env.CRYPTO_PAYMENT_DETAILS || '').replace(/\\n/g, '\n');
 const PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || '';
 const APP_ORIGIN = process.env.APP_ORIGIN || '';
 const MINI_APP_URL = process.env.MINI_APP_URL || 'https://telegram-mini-app33.onrender.com/';
-const ABOUT_IMAGE_URL = 'https://i.ibb.co/yBFsxMbm/about-service.jpg';
 const SUPPORT_USERNAME = (process.env.SUPPORT_USERNAME || 'rezervmanage').replace(/^@/, '').trim();
 const ALLOW_DEMO_ORDERS = process.env.ALLOW_DEMO_ORDERS === 'true';
 const MAX_INIT_DATA_AGE_SECONDS = Number(process.env.INIT_DATA_MAX_AGE_SECONDS || 86400);
@@ -146,16 +146,37 @@ async function sendPaymentInstructions(order) {
     `📅 Термін доступу: ${tariff.days} днів`,
     `💳 До сплати: ${tariff.price.toLocaleString('uk-UA')} грн`,
     '',
-    'Актуальні реквізити для оплати:',
-    PAYMENT_DETAILS,
-    '',
-    '🔔 Після переказу система автоматично перевірить оплату та активує доступ до бота.',
+    'Оберіть зручний спосіб оплати нижче.',
   ].join('\n');
   await telegramApi('sendMessage', {
     chat_id: order.userId,
     text,
     reply_markup: {
-      inline_keyboard: [[{ text: 'Я оплатив(ла)', callback_data: `payment_report:${order.id}` }]],
+      inline_keyboard: [
+        [{ text: '💠 Crypto', callback_data: `payment_crypto:${order.id}` }],
+        [{ text: '💳 Картка — тимчасово не працює', callback_data: 'payment_card_unavailable' }],
+      ],
+    },
+  });
+}
+
+async function sendCryptoPaymentInstructions(order) {
+  const tariff = TARIFFS[order.tariffId];
+  const text = [
+    `🧾 Заявка № ${order.id}`,
+    '',
+    `💠 До сплати у Crypto: еквівалент ${tariff.price.toLocaleString('uk-UA')} грн`,
+    '',
+    'Crypto-реквізити:',
+    CRYPTO_PAYMENT_DETAILS,
+    '',
+    '🔔 Після переказу натисніть кнопку «Я оплатив(ла)». Система перевірить оплату та активує доступ.',
+  ].join('\n');
+  await telegramApi('sendMessage', {
+    chat_id: order.userId,
+    text,
+    reply_markup: {
+      inline_keyboard: [[{ text: '✅ Я оплатив(ла)', callback_data: `payment_report:${order.id}` }]],
     },
   });
 }
@@ -243,8 +264,6 @@ function aboutServiceText() {
     '🔔 Після автоматичної перевірки оплати доступ активується.',
     '',
     '🙏 Дякуємо за ваше замовлення.',
-    '',
-    'На фото демонструється приклад нашого застосунку❗️ — усе стилізовано під оригінал.',
   ].join('\n');
 }
 
@@ -298,40 +317,13 @@ async function replaceBotMessage(query, text, replyMarkup) {
     reply_markup: replyMarkup,
   });
 }
-async function showAboutService(query) {
-  await telegramApi('deleteMessage', {
-    chat_id: query.message.chat.id,
-    message_id: query.message.message_id,
-  });
 
-  await telegramApi('sendPhoto', {
-    chat_id: query.message.chat.id,
-    photo: ABOUT_IMAGE_URL,
-    caption: aboutServiceText(),
-    reply_markup: aboutMenu(),
-  });
-}
-
-async function showMainMenu(query) {
-  await telegramApi('deleteMessage', {
-    chat_id: query.message.chat.id,
-    message_id: query.message.message_id,
-  });
-
-  await telegramApi('sendMessage', {
-    chat_id: query.message.chat.id,
-    text: 'Головне меню. Оберіть потрібну дію.',
-    reply_markup: mainMenu(),
-  });
-}
 async function handleCallbackQuery(query) {
- if (query.data === 'about_service' && query.message?.chat?.id) {
-  await telegramApi('answerCallbackQuery', {
-    callback_query_id: query.id,
-  });
-  await showAboutService(query);
-  return;
-}
+  if (query.data === 'about_service' && query.message?.chat?.id) {
+    await telegramApi('answerCallbackQuery', { callback_query_id: query.id });
+    await replaceBotMessage(query, aboutServiceText(), aboutMenu());
+    return;
+  }
 
   if (query.data === 'customer_profile' && query.message?.chat?.id && query.from?.id) {
     await telegramApi('answerCallbackQuery', { callback_query_id: query.id });
@@ -339,13 +331,44 @@ async function handleCallbackQuery(query) {
     return;
   }
 
- if (query.data === 'main_menu' && query.message?.chat?.id) {
-  await telegramApi('answerCallbackQuery', {
-    callback_query_id: query.id,
-  });
-  await showMainMenu(query);
-  return;
-}
+  if (query.data === 'main_menu' && query.message?.chat?.id) {
+    await telegramApi('answerCallbackQuery', { callback_query_id: query.id });
+    await replaceBotMessage(query, 'Головне меню. Оберіть потрібну дію.', mainMenu());
+    return;
+  }
+
+  if (query.data === 'payment_card_unavailable') {
+    await telegramApi('answerCallbackQuery', {
+      callback_query_id: query.id,
+      text: 'Оплата карткою тимчасово не працює. Оберіть Crypto.',
+      show_alert: true,
+    });
+    return;
+  }
+
+  if (query.data?.startsWith('payment_crypto:')) {
+    const orderId = query.data.slice('payment_crypto:'.length).toUpperCase();
+    const order = state.orders[orderId];
+    if (!order || String(order.userId) !== String(query.from?.id)) {
+      await telegramApi('answerCallbackQuery', { callback_query_id: query.id, text: 'Заявку не знайдено.', show_alert: true });
+      return;
+    }
+    if (order.status !== 'pending') {
+      await telegramApi('answerCallbackQuery', { callback_query_id: query.id, text: 'Ця заявка вже неактивна.', show_alert: true });
+      return;
+    }
+    if (!CRYPTO_PAYMENT_DETAILS) {
+      await telegramApi('answerCallbackQuery', {
+        callback_query_id: query.id,
+        text: 'Crypto-реквізити ще не додані. Спробуйте пізніше.',
+        show_alert: true,
+      });
+      return;
+    }
+    await telegramApi('answerCallbackQuery', { callback_query_id: query.id });
+    await sendCryptoPaymentInstructions(order);
+    return;
+  }
 
   if (!query.data?.startsWith('payment_report:')) return;
   const orderId = query.data.slice('payment_report:'.length).toUpperCase();
@@ -381,7 +404,7 @@ async function handleBotMessage(message) {
   if (text === '/start') {
     await telegramApi('sendMessage', {
       chat_id: userId,
-      text: '🤖 RezBot\n\nШвидке отримання Фейк документів та «відстрочки» у Резерв+ ⚡\n\nЗручний сервіс, оформлення в кілька кроків.\n\n🤝 Підтримка на кожному етапі оформлення.\n\n❗️Допомагає в 99% випадків❗️',
+      text: '🤖 RezBot\n\nІнформаційний сервіс для подання заявки та перевірки підстав.\n\n🤝 Підтримка на кожному етапі оформлення.',
       reply_markup: mainMenu(),
     });
     return;
@@ -406,7 +429,7 @@ async function handleBotMessage(message) {
   if (text === '/status') {
     const access = currentAccess(userId);
     const reply = access
-      ? `Ваш доступ активний до ${formatDate(new Date(access.validUntil))}`
+      ? `Ваш доступ активний до ${formatDate(new Date(access.validUntil))}.`
       : 'Активного доступу немає. Відкрийте Mini App, щоб створити заявку.';
     await telegramApi('sendMessage', { chat_id: userId, text: reply });
     return;
@@ -477,14 +500,13 @@ async function pollUpdates() {
 }
 
 function staticFile(response, pathname) {
- const publicFiles = {'/': 'index.html','/index.html': 'index.html','/config.js': 'config.js','/about-service.jpg': 'about-service.jpg',
-};
+  const publicFiles = { '/': 'index.html', '/index.html': 'index.html', '/config.js': 'config.js' };
   const filename = publicFiles[pathname];
   if (!filename) return false;
   const filePath = join(STATIC_DIR, filename);
   if (!existsSync(filePath)) return false;
-  const mimeTypes = { 'html': 'text/html; charset=utf-8', 'js': 'text/javascript; charset=utf-8', 'css': 'text/css; charset=utf-8', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png' };
-response.writeHead(200, { 'Content-Type': mimeTypes[extname(filePath).replace('.', '')] ?? 'application/octet-stream', 'X-Content-Type-Options': 'nosniff' });
+  const mimeTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
+  response.writeHead(200, { 'Content-Type': mimeTypes[extname(filePath)] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff' });
   response.end(readFileSync(filePath));
   return true;
 }
@@ -543,7 +565,6 @@ const server = createServer(async (request, response) => {
       const body = await readJson(request);
       if (body.serviceId !== 'vidstrochka' || !TARIFFS[body.tariffId]) throw new Error('Оберіть коректний тариф.');
       const isDemo = ALLOW_DEMO_ORDERS && !body.initData;
-      if (!isDemo && !PAYMENT_DETAILS) throw new Error('Реквізити для оплати не налаштовані. Зверніться до адміністратора.');
       const user = isDemo ? { id: `demo-${randomBytes(4).toString('hex')}` } : telegramUserFromInitData(String(body.initData || ''));
       const order = {
         id: makeOrderId(),
