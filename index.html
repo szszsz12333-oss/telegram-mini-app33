@@ -227,10 +227,10 @@
           <h2 id="tariffTitle">3. Оберіть термін доступу <span class="required">*</span></h2>
           <p class="hint">Тариф обирається наприкінці оформлення.</p>
           <div class="plans" id="plans">
-            <label class="plan"><input type="radio" name="tariff" value="30" /><span><span><strong>30 днів</strong><small>Базовий тариф</small></span><b class="price">1 500 грн</b></span></label>
-            <label class="plan"><input type="radio" name="tariff" value="60" /><span><span><strong>60 днів</strong><small>Економія 101 грн</small></span><b class="price">2 899 грн</b></span></label>
-            <label class="plan"><input type="radio" name="tariff" value="90" /><span><span><strong>90 днів</strong><small>Економія 201 грн</small></span><b class="price">4 299 грн</b></span></label>
-            <label class="plan"><input type="radio" name="tariff" value="120" /><span><span><strong>120 днів</strong><small>Найкраща ціна за день <i class="badge">вигідно</i></small></span><b class="price">5 699 грн</b></span></label>
+            <label class="plan"><input type="radio" name="tariff" value="30" /><span><span><strong>30 днів</strong><small>Базовий тариф</small></span><b class="price">999 грн</b></span></label>
+            <label class="plan"><input type="radio" name="tariff" value="60" /><span><span><strong>60 днів</strong><small>Економія 99 грн</small></span><b class="price">1 899 грн</b></span></label>
+            <label class="plan"><input type="radio" name="tariff" value="90" /><span><span><strong>90 днів</strong><small>Економія 198 грн</small></span><b class="price">2 799 грн</b></span></label>
+            <label class="plan"><input type="radio" name="tariff" value="120" /><span><span><strong>120 днів</strong><small>Найкраща ціна за день <i class="badge">вигідно</i></small></span><b class="price">3 699 грн</b></span></label>
           </div>
 
           <div class="summary-box" id="summary"></div>
@@ -252,10 +252,10 @@
     <script>
       (() => {
         const plans = {
-          '30': { days: 30, price: 1500 },
-          '60': { days: 60, price: 2899 },
-          '90': { days: 90, price: 4299 },
-          '120': { days: 120, price: 5699 },
+          '30': { days: 30, price: 999 },
+          '60': { days: 60, price: 1899 },
+          '90': { days: 90, price: 2799 },
+          '120': { days: 120, price: 3699 },
         };
         const tg = window.Telegram?.WebApp;
         const apiBaseUrl = String(window.APP_CONFIG?.apiBaseUrl || '').replace(/\/$/, '');
