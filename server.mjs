@@ -15,7 +15,6 @@ const CRYPTO_PAYMENT_DETAILS = (process.env.CRYPTO_PAYMENT_DETAILS || '').replac
 const PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || '';
 const APP_ORIGIN = process.env.APP_ORIGIN || '';
 const MINI_APP_URL = process.env.MINI_APP_URL || 'https://telegram-mini-app33.onrender.com/';
-const ABOUT_IMAGE_URL = 'https://i.ibb.co/yBFsxMbm/about-service.jpg';
 const SUPPORT_USERNAME = (process.env.SUPPORT_USERNAME || 'rezervmanage').replace(/^@/, '').trim();
 const ALLOW_DEMO_ORDERS = process.env.ALLOW_DEMO_ORDERS === 'true';
 const MAX_INIT_DATA_AGE_SECONDS = Number(process.env.INIT_DATA_MAX_AGE_SECONDS || 86400);
@@ -223,6 +222,25 @@ function customerDetails(order, fallbackUser) {
   };
 }
 
+async function notifyAdminsAboutBotStart(user) {
+  if (!ADMIN_IDS.size || !user?.id) return;
+  const name = [user.first_name, user.last_name].filter(Boolean).join(' ') || 'не вказано';
+  const username = user.username ? `@${user.username}` : 'не вказано';
+  const text = [
+    '👋 Новий клієнт запустив бота',
+    '',
+    `👤 Ім’я: ${name}`,
+    `📱 Username: ${username}`,
+    `🆔 Telegram ID: ${user.id}`,
+  ].join('\n');
+  const results = await Promise.allSettled(
+    [...ADMIN_IDS].map((adminId) => telegramApi('sendMessage', { chat_id: adminId, text })),
+  );
+  if (results.some((result) => result.status === 'rejected')) {
+    console.error('Не вдалося надіслати повідомлення про запуск бота одному або кільком адміністраторам.');
+  }
+}
+
 async function notifyAdminsAboutPayment(order, telegramUser) {
   if (!ADMIN_IDS.size) throw new Error('Адміністратори не налаштовані. Спробуйте пізніше.');
   const tariff = TARIFFS[order.tariffId];
@@ -261,8 +279,6 @@ function aboutServiceText() {
     '🔔 Після автоматичної перевірки оплати доступ активується.',
     '',
     '🙏 Дякуємо за ваше замовлення.',
-    '',
-    'На фото демонструється приблизний вигляд нашого застосунку❗️— усе стилізовано під оригінал.',
   ].join('\n');
 }
 
@@ -316,40 +332,13 @@ async function replaceBotMessage(query, text, replyMarkup) {
     reply_markup: replyMarkup,
   });
 }
-async function showAboutService(query) {
-  await telegramApi('deleteMessage', {
-    chat_id: query.message.chat.id,
-    message_id: query.message.message_id,
-  });
 
-  await telegramApi('sendPhoto', {
-    chat_id: query.message.chat.id,
-    photo: ABOUT_IMAGE_URL,
-    caption: aboutServiceText(),
-    reply_markup: aboutMenu(),
-  });
-}
-
-async function showMainMenu(query) {
-  await telegramApi('deleteMessage', {
-    chat_id: query.message.chat.id,
-    message_id: query.message.message_id,
-  });
-
-  await telegramApi('sendMessage', {
-    chat_id: query.message.chat.id,
-    text: 'Головне меню. Оберіть потрібну дію.',
-    reply_markup: mainMenu(),
-  });
-}
 async function handleCallbackQuery(query) {
- if (query.data === 'about_service' && query.message?.chat?.id) {
-  await telegramApi('answerCallbackQuery', {
-    callback_query_id: query.id,
-  });
-  await showAboutService(query);
-  return;
-}
+  if (query.data === 'about_service' && query.message?.chat?.id) {
+    await telegramApi('answerCallbackQuery', { callback_query_id: query.id });
+    await replaceBotMessage(query, aboutServiceText(), aboutMenu());
+    return;
+  }
 
   if (query.data === 'customer_profile' && query.message?.chat?.id && query.from?.id) {
     await telegramApi('answerCallbackQuery', { callback_query_id: query.id });
@@ -357,13 +346,11 @@ async function handleCallbackQuery(query) {
     return;
   }
 
- if (query.data === 'main_menu' && query.message?.chat?.id) {
-  await telegramApi('answerCallbackQuery', {
-    callback_query_id: query.id,
-  });
-  await showMainMenu(query);
-  return;
-}
+  if (query.data === 'main_menu' && query.message?.chat?.id) {
+    await telegramApi('answerCallbackQuery', { callback_query_id: query.id });
+    await replaceBotMessage(query, 'Головне меню. Оберіть потрібну дію.', mainMenu());
+    return;
+  }
 
   if (query.data === 'payment_card_unavailable') {
     await telegramApi('answerCallbackQuery', {
@@ -435,9 +422,10 @@ async function handleBotMessage(message) {
   if (text === '/start') {
     await telegramApi('sendMessage', {
       chat_id: userId,
-      text: '🤖 RezBot\n\nШвидке отримання Фейк документів та «відстрочки» у Резерв+ ⚡\n\nЗручний сервіс, оформлення в кілька кроків.\n\n🤝 Підтримка на кожному етапі оформлення.\n\n❗️Допомагає в 99% випадків❗️',
+      text: '🤖 RezBot\n\nІнформаційний сервіс для подання заявки та перевірки підстав.\n\n🤝 Підтримка на кожному етапі оформлення.',
       reply_markup: mainMenu(),
     });
+    if (!isAdmin(userId)) await notifyAdminsAboutBotStart(message.from);
     return;
   }
 
@@ -548,24 +536,12 @@ async function pollUpdates() {
 }
 
 function staticFile(response, pathname) {
- const publicFiles = {
-  '/': 'index.html',
-  '/index.html': 'index.html',
-  '/config.js': 'config.js',
-  '/about-service.jpg': 'about-service.jpg',
-};
+  const publicFiles = { '/': 'index.html', '/index.html': 'index.html', '/config.js': 'config.js' };
   const filename = publicFiles[pathname];
   if (!filename) return false;
   const filePath = join(STATIC_DIR, filename);
   if (!existsSync(filePath)) return false;
- const mimeTypes = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
-};
+  const mimeTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
   response.writeHead(200, { 'Content-Type': mimeTypes[extname(filePath)] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff' });
   response.end(readFileSync(filePath));
   return true;
