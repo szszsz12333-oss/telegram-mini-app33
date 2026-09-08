@@ -24,10 +24,10 @@ const DATA_DIR = resolve(process.env.DATA_DIR || join(__dirname, 'runtime'));
 const STATE_FILE = join(DATA_DIR, 'state.json');
 
 const TARIFFS = Object.freeze({
-  '30': { days: 30, price: 1500 },
-  '60': { days: 60, price: 2899 },
-  '90': { days: 90, price: 4299 },
-  '120': { days: 120, price: 5699 },
+  '30': { days: 30, price: 999 },
+  '60': { days: 60, price: 1899 },
+  '90': { days: 90, price: 2799 },
+  '120': { days: 120, price: 3699 },
 });
 
 mkdirSync(DATA_DIR, { recursive: true });
